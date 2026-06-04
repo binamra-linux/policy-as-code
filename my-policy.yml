@@ -1,16 +1,29 @@
 general:
   level: error
-
-dependencies:
-  level: error
   remediate:
     critical: 7
     high: 14
     all: 90
 
+codescanning:
+  level: high
+
 dependabot:
   level: high
-  remediate:
-    critical: 7
-    high: 30
-    all: 90
+
+secretscanning:
+  level: all
+
+licensing:
+  level: error
+  conditions:
+    ids:
+      - GPL-2.0
+      - GPL-3.0
+  warnings:
+    ids:
+      - Other
+      - NA
+
+dependencies:
+  level: high
