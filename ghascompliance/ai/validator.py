@@ -1,6 +1,7 @@
 """Validates AI-generated policy YAML against the existing Policy schema."""
 
 import re
+import logging
 from typing import Tuple
 
 import yaml
@@ -40,12 +41,16 @@ def validate_policy_yaml(yaml_str: str) -> Tuple[bool, str, dict]:
     if not isinstance(policy_dict, dict):
         return False, "Policy must be a YAML mapping (got a non-dict value).", {}
 
-    # Re-use the existing Policy engine to catch schema violations
+    # Re-use the existing Policy engine to catch schema violations.
+    # Silence the Octokit/root logger during validation so AI mode output stays clean.
     try:
+        logging.disable(logging.CRITICAL)
         policy = Policy(severity="error")
         policy.loadPolicy(policy_dict)
     except Exception as exc:
         return False, str(exc), {}
+    finally:
+        logging.disable(logging.NOTSET)
 
     return True, "", policy_dict
 
