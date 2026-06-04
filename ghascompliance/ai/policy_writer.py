@@ -27,11 +27,16 @@ _BANNER = """
 
 _INTERACTIVE_INTRO = """
 Welcome to the interactive policy writer.
-I'll ask you a few questions to understand your security requirements,
-then generate a policy YAML file you can use directly.
+The AI will ask up to 3 short questions, then generate your policy.
 
-Type 'quit' or press Ctrl+C at any time to exit without saving.
+Commands:
+  generate  — force policy generation immediately
+  quit      — exit without saving
+  Ctrl+C    — exit without saving
 """
+
+# After this many user answers, automatically inject "generate now" into the conversation.
+_MAX_TURNS_BEFORE_GENERATE = 3
 
 
 def _write_output(yaml_str: str, output_path: str | None) -> None:
@@ -86,6 +91,21 @@ def run_single_shot(
     return 1
 
 
+def _prompt_save(yaml_str: str, output: str | None) -> bool:
+    """Ask the user to confirm saving. Returns True if saved."""
+    print("\n" + "-" * 52)
+    print(yaml_str)
+    print("-" * 52)
+    try:
+        answer = input("\nSave this policy? [y = yes / anything else = adjust]: ").strip().lower()
+    except (KeyboardInterrupt, EOFError):
+        return False
+    if answer in ("y", "yes", ""):
+        _write_output(yaml_str, output)
+        return True
+    return False
+
+
 def run_interactive(
     output: str | None = None,
     provider_name: str | None = None,
@@ -98,8 +118,9 @@ def run_interactive(
 
     messages = []
     last_valid_yaml = ""
+    user_turn_count = 0
 
-    # Seed: user sends a greeting; Claude opens with the first question
+    # Seed: user sends a greeting; Claude opens with the first question.
     seed = "Hello, I want to create a security policy."
     opening = chat_turn([{"role": "user", "content": seed}], provider)
     print(f"Assistant: {opening}\n")
@@ -113,35 +134,68 @@ def run_interactive(
             print("\nCancelled. No policy was saved.")
             return 1
 
+        if not user_input:
+            continue
+
         if user_input.lower() in ("quit", "exit", "q"):
             print("Exiting. No policy was saved.")
             return 1
 
-        if not user_input:
-            continue
+        # 'generate' command forces immediate policy generation.
+        force_generate = user_input.lower() in ("generate", "gen", "create")
+        if force_generate:
+            content = (
+                "I have provided enough information. "
+                "Please generate the complete policy YAML now in a ```yaml block."
+            )
+        else:
+            content = user_input
+            user_turn_count += 1
 
-        messages.append({"role": "user", "content": user_input})
+        # After max turns, append a generate instruction to the user's message.
+        if not force_generate and user_turn_count >= _MAX_TURNS_BEFORE_GENERATE:
+            content = (
+                f"{user_input}\n\n"
+                "You now have enough information. "
+                "Generate the complete policy YAML immediately in a ```yaml block."
+            )
+
+        messages.append({"role": "user", "content": content})
         response = chat_turn(messages, provider)
         messages.append({"role": "assistant", "content": response})
 
-        # Check if Claude is signalling the conversation is done
-        if "POLICY_FINALIZED" in response:
-            if last_valid_yaml:
-                _write_output(last_valid_yaml, output)
-                return 0
-            print("\nAssistant: (no valid policy captured yet — please continue.)\n")
-            continue
-
-        # Check whether this response contains a YAML block
+        # Check for a YAML block in the response.
         yaml_block = extract_yaml_block(response)
         if yaml_block:
             is_valid, error, _ = validate_policy_yaml(yaml_block)
             if is_valid:
                 last_valid_yaml = yaml_block
-                print(f"\nAssistant: {response}\n")
+                # Strip the yaml block from the printed response to avoid duplication,
+                # then show the policy and ask to save.
+                prose = response.replace(f"```yaml\n{yaml_block}\n```", "").strip()
+                if prose:
+                    print(f"\nAssistant: {prose}\n")
+                if _prompt_save(last_valid_yaml, output):
+                    return 0
+                # User wants adjustments — treat their answer as next input.
+                try:
+                    adjustment = input("You: ").strip()
+                except (KeyboardInterrupt, EOFError):
+                    print("\nCancelled.")
+                    return 1
+                if adjustment:
+                    messages.append({"role": "user", "content": adjustment})
+                    response2 = chat_turn(messages, provider)
+                    messages.append({"role": "assistant", "content": response2})
+                    yaml_block2 = extract_yaml_block(response2)
+                    if yaml_block2:
+                        is_valid2, _, _ = validate_policy_yaml(yaml_block2)
+                        if is_valid2:
+                            last_valid_yaml = yaml_block2
+                    print(f"\nAssistant: {response2}\n")
             else:
                 print(f"\nAssistant: {response}")
-                print(f"\n[Validation note: {error} — ask me to fix it.]\n")
+                print(f"\n[Validation issue: {error} — ask me to fix it.]\n")
         else:
             print(f"\nAssistant: {response}\n")
 
