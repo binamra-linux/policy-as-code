@@ -1,4 +1,5 @@
 import os
+import sys
 import argparse
 import logging
 
@@ -68,6 +69,12 @@ thresholds.add_argument("--count", type=int, default=-1)
 
 
 if __name__ == "__main__":
+    # Route AI subcommand before the existing compliance-check argument parsing.
+    if len(sys.argv) > 1 and sys.argv[1] == "generate-policy":
+        from ghascompliance.ai.policy_writer import main as _ai_main
+        _ai_main(sys.argv[2:])
+        sys.exit(0)
+
     print(__banner__)
     arguments = parser.parse_args()
 
