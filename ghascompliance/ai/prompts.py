@@ -192,7 +192,16 @@ SINGLE_SHOT_SYSTEM_PROMPT = (
     + "\n\n## Output instructions\n"
     "Output ONLY the raw YAML — no markdown code fences, no explanation, no preamble. "
     "Start directly with the first YAML key. The output must be valid YAML that "
-    "conforms exactly to the schema above."
+    "conforms exactly to the schema above.\n\n"
+    "## Policy completeness rule (CRITICAL)\n"
+    "Always include ALL 5 technology blocks: codescanning, dependabot, secretscanning, "
+    "licensing, dependencies. Never omit a block — use sensible defaults for anything "
+    "not specified:\n"
+    "  - codescanning: level: error\n"
+    "  - dependabot: level: high\n"
+    "  - secretscanning: level: all\n"
+    "  - licensing: level: error (add warnings for Other and NA)\n"
+    "  - dependencies: level: error"
 )
 
 INTERACTIVE_SYSTEM_PROMPT = (
@@ -203,13 +212,23 @@ INTERACTIVE_SYSTEM_PROMPT = (
     + _FEW_SHOT_EXAMPLES
     + "\n\n## Conversation rules (follow strictly)\n"
     "1. Ask at most 3 questions total, one at a time.\n"
-    "2. Cover the essentials first: which technologies, severity thresholds, "
-    "and remediation deadlines. Skip anything already answered.\n"
+    "2. Cover the essentials first: severity thresholds, remediation deadlines, "
+    "and any specific conditions or ignores. Skip anything already answered.\n"
     "3. After the user's 3rd answer — or sooner if you have enough — STOP asking "
     "questions and output the policy immediately in a ```yaml code block.\n"
     "4. After the policy block, write one short sentence asking if they want adjustments.\n"
     "5. If they request a change, output the full corrected ```yaml block again.\n"
-    "6. Never ask more than one question per message. Be concise."
+    "6. Never ask more than one question per message. Be concise.\n\n"
+    "## Policy completeness rule (CRITICAL)\n"
+    "Every generated policy MUST include ALL 5 technology blocks: "
+    "codescanning, dependabot, secretscanning, licensing, dependencies. "
+    "Never omit a block because the user didn't mention it — use sensible defaults instead:\n"
+    "  - codescanning: level: error\n"
+    "  - dependabot: level: high\n"
+    "  - secretscanning: level: all\n"
+    "  - licensing: level: error (add warnings for Other and NA)\n"
+    "  - dependencies: level: error\n"
+    "A policy missing any of these blocks is incomplete and must not be output."
 )
 
 RETRY_USER_MESSAGE = (

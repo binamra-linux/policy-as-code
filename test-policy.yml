@@ -1,0 +1,23 @@
+general:
+  level: high
+  remediate:
+    critical: 14
+
+codescanning:
+  level: high
+
+dependabot:
+  level: high
+
+secretscanning:
+  level: all
+
+licensing:
+  level: error
+  warnings:
+    ids:
+      - Other
+      - NA
+
+dependencies:
+  level: error
