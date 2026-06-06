@@ -114,6 +114,10 @@ if __name__ == "__main__":
     ghastoolkit_logger = logging.getLogger("ghastoolkit")
     ghastoolkit_logger.setLevel(logging.DEBUG if arguments.debug else logging.INFO)
 
+    # --explain requires individual violations to be logged; force display mode.
+    if arguments.explain:
+        arguments.display = True
+
     _capture = _ViolationCapture()
     if arguments.explain:
         logging.getLogger().addHandler(_capture)
