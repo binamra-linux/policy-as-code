@@ -67,6 +67,33 @@ thresholds.add_argument("--severity", default="Error")
 thresholds.add_argument("--list-severities", action="store_true")
 thresholds.add_argument("--count", type=int, default=-1)
 
+ai_arguments = parser.add_argument_group("AI")
+ai_arguments.add_argument(
+    "--explain",
+    action="store_true",
+    default=False,
+    help="After the compliance run, use AI to explain violations in plain English.",
+)
+ai_arguments.add_argument(
+    "--explain-provider",
+    default=None,
+    metavar="PROVIDER",
+    help="AI provider for --explain (groq, gemini, anthropic). Defaults to AI_PROVIDER or groq.",
+)
+
+
+class _ViolationCapture(logging.Handler):
+    """Logging handler that collects violation messages during the compliance run."""
+
+    def __init__(self):
+        super().__init__(level=logging.ERROR)
+        self.violations: list = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        msg = record.getMessage()
+        if "Alert ::" in msg or "Violation ::" in msg:
+            self.violations.append(msg)
+
 
 if __name__ == "__main__":
     # Route AI subcommand before the existing compliance-check argument parsing.
@@ -86,6 +113,10 @@ if __name__ == "__main__":
     Octokit.setLevel(logging.DEBUG if arguments.debug else logging.INFO)
     ghastoolkit_logger = logging.getLogger("ghastoolkit")
     ghastoolkit_logger.setLevel(logging.DEBUG if arguments.debug else logging.INFO)
+
+    _capture = _ViolationCapture()
+    if arguments.explain:
+        logging.getLogger().addHandler(_capture)
 
     if arguments.debug:
         Octokit.debug("Debugging enabled")
@@ -253,6 +284,24 @@ if __name__ == "__main__":
         PullRequest.addPrComment(policy.name)
 
     Octokit.info("Total unacceptable alerts :: " + str(errors))
+
+    if arguments.explain:
+        logging.getLogger().removeHandler(_capture)
+        print("\n" + "=" * 60)
+        print("  AI Compliance Explainer")
+        print("=" * 60)
+        try:
+            from ghascompliance.ai.explainer import explain_results
+            report = explain_results(
+                repository=arguments.github_repository,
+                violations=_capture.violations,
+                total_errors=errors,
+                provider_name=arguments.explain_provider,
+            )
+            print(report)
+        except Exception as exc:
+            print(f"[AI Explainer error: {exc}]")
+        print("=" * 60 + "\n")
 
     if arguments.action == "break" and errors > 0:
         Octokit.error("Unacceptable Threshold of Risk has been hit!")
