@@ -291,21 +291,53 @@ if __name__ == "__main__":
 
     if arguments.explain:
         logging.getLogger().removeHandler(_capture)
-        print("\n" + "=" * 60)
-        print("  AI Compliance Explainer")
-        print("=" * 60)
         try:
+            from rich.console import Console
+            from rich.markdown import Markdown
+            from rich.panel import Panel
+            from rich.table import Table
             from ghascompliance.ai.explainer import explain_results
+
+            _console = Console()
+
+            # Summary table
+            table = Table(title="Compliance Summary", show_header=True, header_style="bold")
+            table.add_column("Check", style="cyan")
+            table.add_column("Result", justify="center")
+            status = "[bold red]FAILED[/]" if errors > 0 else "[bold green]PASSED[/]"
+            table.add_row("Total violations", str(errors))
+            table.add_row("Policy", arguments.github_policy_path or "default")
+            table.add_row("Repository", arguments.github_repository)
+            table.add_row("Outcome", status)
+            _console.print(table)
+
+            # AI report
             report = explain_results(
                 repository=arguments.github_repository,
                 violations=_capture.violations,
                 total_errors=errors,
                 provider_name=arguments.explain_provider,
             )
-            print(report)
+            border = "red" if errors > 0 else "green"
+            _console.print(Panel(Markdown(report), title="AI Compliance Report", border_style=border))
+
+        except ImportError:
+            # Fallback if rich is not installed
+            print("\n" + "=" * 60 + "\n  AI Compliance Explainer\n" + "=" * 60)
+            try:
+                from ghascompliance.ai.explainer import explain_results
+                report = explain_results(
+                    repository=arguments.github_repository,
+                    violations=_capture.violations,
+                    total_errors=errors,
+                    provider_name=arguments.explain_provider,
+                )
+                print(report)
+            except Exception as exc:
+                print(f"[AI Explainer error: {exc}]")
+            print("=" * 60 + "\n")
         except Exception as exc:
             print(f"[AI Explainer error: {exc}]")
-        print("=" * 60 + "\n")
 
     if arguments.action == "break" and errors > 0:
         Octokit.error("Unacceptable Threshold of Risk has been hit!")
