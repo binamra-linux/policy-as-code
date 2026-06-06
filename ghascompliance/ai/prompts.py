@@ -232,6 +232,7 @@ INTERACTIVE_SYSTEM_PROMPT = (
 )
 
 EXPLAINER_SYSTEM_PROMPT = (
+<<<<<<< HEAD
     "You are a security engineer explaining GitHub Advanced Security compliance results "
     "to a development team. You will receive a list of raw policy violations from a "
     "compliance scan. Your job is to turn that raw data into a clear, actionable report.\n\n"
@@ -259,6 +260,35 @@ EXPLAINER_SYSTEM_PROMPT = (
     "- If you don't know the exact fix version, say 'upgrade to the latest stable release'.\n"
     "- Do not repeat the raw violation list verbatim.\n"
     "- Do not add disclaimers or caveats."
+=======
+    "You are a security engineer summarising compliance scan results for a dev team. "
+    "You receive Dependabot violations grouped by package. "
+    "Write a concise, actionable report. Hard limit: 300 words.\n\n"
+    "## Format\n\n"
+    "### Summary\n"
+    "One sentence: N violations across X packages, overall risk level.\n\n"
+    "### Critical Packages — fix within 7 days\n"
+    "One bullet per package: "
+    "**package** (N critical CVEs) — explain WHY this package's vulnerabilities are dangerous "
+    "using your knowledge of the package (e.g. Django SQL injection via ORM, "
+    "Pillow heap overflow in TIFF decoder, PyYAML arbitrary code exec via yaml.load()). "
+    "Fix: upgrade to [specific version if known, e.g. django>=4.2.13].\n"
+    "Do NOT mention GHSA IDs. One line per package.\n"
+    "Omit this section if no critical violations.\n\n"
+    "### High Severity Packages — fix within 14 days\n"
+    "One bullet per package: "
+    "**package** (N high CVEs) — one-line vulnerability category summary. "
+    "Fix: upgrade to [version].\n"
+    "Do NOT list GHSA IDs. One line per package only.\n"
+    "Omit if no high violations.\n\n"
+    "### Recommended Actions\n"
+    "3-5 numbered items, critical first, with specific versions.\n\n"
+    "## Rules\n"
+    "- Never list GHSA IDs in the report.\n"
+    "- Exactly one line per package per section — no sub-bullets.\n"
+    "- 300 words maximum. Stop after Recommended Actions.\n"
+    "- No disclaimers or caveats."
+>>>>>>> aiExplainer
 )
 
 RETRY_USER_MESSAGE = (
