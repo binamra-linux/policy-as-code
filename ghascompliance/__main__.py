@@ -96,10 +96,15 @@ class _ViolationCapture(logging.Handler):
 
 
 if __name__ == "__main__":
-    # Route AI subcommand before the existing compliance-check argument parsing.
+    # Route AI subcommands before the existing compliance-check argument parsing.
     if len(sys.argv) > 1 and sys.argv[1] == "generate-policy":
         from ghascompliance.ai.policy_writer import main as _ai_main
         _ai_main(sys.argv[2:])
+        sys.exit(0)
+
+    if len(sys.argv) > 1 and sys.argv[1] == "recommend-policy":
+        from ghascompliance.ai.recommender import main as _rec_main
+        _rec_main(sys.argv[2:])
         sys.exit(0)
 
     print(__banner__)

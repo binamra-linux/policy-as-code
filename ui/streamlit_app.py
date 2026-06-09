@@ -19,7 +19,9 @@ st.set_page_config(
 st.title("🔒 AI-Assisted Policy as Code")
 st.caption("Generate security policies with AI · Run compliance checks · Get plain-English explanations")
 
-tab_generate, tab_check = st.tabs(["📝 Generate Policy", "🔍 Compliance Check"])
+tab_generate, tab_check, tab_recommend = st.tabs(
+    ["📝 Generate Policy", "🔍 Compliance Check", "🎯 Recommend Policy"]
+)
 
 
 # ── Tab 1: Policy Generator ───────────────────────────────────────────────────
@@ -216,3 +218,105 @@ with tab_check:
                     st.markdown(report)
                 except Exception as exc:
                     st.error(f"AI explainer error: {exc}")
+
+
+# ── Tab 3: Policy Recommender ─────────────────────────────────────────────────
+with tab_recommend:
+    st.header("AI Policy Recommender")
+    st.write(
+        "Point the tool at any GitHub repository and the AI will analyse its "
+        "languages, team size, and current open alerts to recommend a calibrated policy — "
+        "with inline comments explaining each threshold choice."
+    )
+
+    col_r1, col_r2 = st.columns([1, 1])
+
+    with col_r1:
+        rec_token = st.text_input(
+            "GitHub Token",
+            type="password",
+            value=os.environ.get("GITHUB_TOKEN", ""),
+            key="rec_token",
+            help="Personal access token with repo and security_events scopes.",
+        )
+        rec_repo = st.text_input(
+            "Repository",
+            placeholder="owner/repo",
+            key="rec_repo",
+        )
+
+    with col_r2:
+        rec_provider = st.selectbox(
+            "AI Provider", ["groq", "gemini", "anthropic"], key="rec_provider"
+        )
+        rec_output = st.text_input(
+            "Save to file (optional)", placeholder="recommended-policy.yml", key="rec_output"
+        )
+
+    can_recommend = bool(rec_token and rec_repo and "/" in rec_repo)
+
+    if st.button("Analyse & Recommend", type="primary", disabled=not can_recommend):
+        owner, repo = rec_repo.strip().split("/", 1)
+
+        with st.spinner(f"Fetching context for {owner}/{repo}..."):
+            try:
+                from ghascompliance.ai.recommender import fetch_repo_context, _format_context
+                ctx = fetch_repo_context(owner, repo, rec_token)
+                context_text = _format_context(ctx)
+            except Exception as exc:
+                st.error(f"GitHub API error: {exc}")
+                st.stop()
+
+        # Show what context was gathered
+        with st.expander("Repository context used", expanded=False):
+            st.code(context_text, language="text")
+
+            dep = ctx.get("dependabot_alerts", {})
+            cs = ctx.get("code_scanning_alerts", {})
+            if dep or cs:
+                import pandas as pd
+                alert_rows = []
+                for sev, cnt in dep.items():
+                    alert_rows.append({"Source": "Dependabot", "Severity": sev.upper(), "Count": cnt})
+                for sev, cnt in cs.items():
+                    alert_rows.append({"Source": "Code Scanning", "Severity": sev.upper(), "Count": cnt})
+                st.dataframe(pd.DataFrame(alert_rows), use_container_width=True)
+
+        with st.spinner("Generating recommended policy..."):
+            try:
+                from ghascompliance.ai.providers.factory import get_provider
+                from ghascompliance.ai.prompts import RECOMMENDER_SYSTEM_PROMPT
+                from ghascompliance.ai.validator import validate_policy_yaml
+
+                provider = get_provider(rec_provider)
+                yaml_str = provider.chat(
+                    [{"role": "user", "content": context_text}],
+                    RECOMMENDER_SYSTEM_PROMPT,
+                )
+                is_valid, error, _ = validate_policy_yaml(yaml_str)
+            except EnvironmentError as exc:
+                st.error(str(exc))
+                st.stop()
+            except Exception as exc:
+                st.error(f"Error: {exc}")
+                st.stop()
+
+        if is_valid:
+            st.success(f"Recommended policy for **{rec_repo}** — validated successfully.")
+        else:
+            st.warning(f"Policy generated but failed schema validation: {error}")
+
+        st.code(yaml_str, language="yaml")
+
+        if rec_output.strip():
+            with open(rec_output.strip(), "w") as fh:
+                fh.write(yaml_str)
+            st.info(f"Saved to `{rec_output.strip()}`")
+
+        st.download_button(
+            label="Download recommended-policy.yml",
+            data=yaml_str,
+            file_name=rec_output.strip() or "recommended-policy.yml",
+            mime="text/yaml",
+            key="rec_download",
+        )
